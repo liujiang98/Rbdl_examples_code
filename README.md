@@ -1,6 +1,7 @@
 # Rbdl_examples_code  
 mkdir build && cd build  
-cmake .. && ./rbdltest  
+cmake .. && make  
+./rbdltest  
 
 简单易用的rbdl动力学库示例代码
 详细文档可参考

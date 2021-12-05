@@ -1,6 +1,4 @@
 #include "KinModel.hpp"
-#include <utils/pseudo_inverse.hpp>
-#include <vector>
 
 using namespace RigidBodyDynamics::Math;
 using namespace RigidBodyDynamics;
@@ -19,39 +17,43 @@ KinModel::KinModel( RigidBodyDynamics::Model* model):
     gravity_(9.81)
 {
     model_ = model;
-    Ig_ = dynacore::Matrix::Zero(6,6);
-    Jg_ = dynacore::Matrix::Zero(6, model_->qdot_size);
+    Ig_ = MatrixXd::Zero(6,6);
+    Jg_ = MatrixXd::Zero(6, model_->qdot_size);
 }
 
 KinModel::~KinModel(){
 }
 
-void KinModel::UpdateKinematics(const dynacore::Vector & q, 
-        const dynacore::Vector & qdot){
+void KinModel::UpdateKinematics(const VectorXd & q, 
+        const VectorXd & qdot){
     _UpdateCentroidFrame(q, qdot);
 }
 /********mainly reference to "Dynamic behaviors on the NAO robot with closed-loop 
          whole body operational space control" by Donghyun Kim**************************/
-void KinModel::_UpdateCentroidFrame(const dynacore::Vector & q,
-        const dynacore::Vector & qdot){
+void KinModel::_UpdateCentroidFrame(const VectorXd & q,
+        const VectorXd & qdot){
     double mass;
-    Vector3d zero_vector;
+    Vec3 zero_vector;
     zero_vector.setZero();
 
-    Vector3d com_pos;
-    Vector3d cm;
-    Vector3d link_pos;
-    Vector3d p_g;
+    Vec3 com_pos;
+    Vec3 cm;
+    Vec3 link_pos;
+    Vec3 p_g;
 
     getCoMPos(com_pos);
+    //cout << "kim_compos:\n" << com_pos.transpose() << "\n\n";
     com_pos_ = com_pos;
 
-    dynacore::Matrix Xg_inv = dynacore::Matrix::Zero(6, 6);
+    MatrixXd Xg_inv = MatrixXd::Zero(6, 6);
+    MatrixXd link_X_com = MatrixXd::Zero(6, 6);
     Ig_.setZero();
-    dynacore::Matrix Ag = dynacore::Matrix::Zero(6, model_->qdot_size);
-
-    dynacore::Matrix I = dynacore::Matrix::Zero(6, 6);
-    dynacore::Matrix Jsp = dynacore::Matrix::Zero(6, model_->qdot_size);
+    Ag = MatrixXd::Zero(6, model_->qdot_size);
+    Ig_2 = MatrixXd::Zero(6,6);
+    Ag_2 = MatrixXd::Zero(6, model_->qdot_size);
+    //std::cout << "model_->qdot_size: " << model_->qdot_size << "\n\n";
+    MatrixXd I = MatrixXd::Zero(6, 6);
+    MatrixXd Jsp = MatrixXd::Zero(6, model_->qdot_size);
 
     int start_idx = _find_body_idx(robot_link::trunk);
     Matrix3d p;
@@ -70,37 +72,49 @@ void KinModel::_UpdateCentroidFrame(const dynacore::Vector & q,
         I.setZero();
         cm = model_->mBodies[i].mCenterOfMass;
         //cout << "m: " << mass << " mass center: " << cm.transpose() << "\n\n";
-        cmm <<
-            0.0, -cm[2], cm[1],
-            cm[2], 0.0, -cm[0],
-            -cm[1], cm[0], 0.0;
+        cmm = vecCross(cm);
         I.setZero();
         I.block(0, 0, 3, 3) = model_->mBodies[i].mInertia + mass * cmm * cmm.transpose();
         I.block(0,3, 3,3) = mass * cmm;
-        I.block(3,0, 3,3) = -mass * cmm;//cmm.transpose = - cmm
-        I.block(3, 3, 3, 3) = mass * dynacore::Matrix::Identity(3,3);
+        I.block(3,0, 3,3) = mass * cmm.transpose();
+        I.block(3, 3, 3, 3) = mass * MatrixXd::Identity(3,3);
 
-        p_g = R * (link_pos - com_pos);
-        p << 0.0, -p_g[2], p_g[1],
-            p_g[2], 0.0, -p_g[0],
-            -p_g[1], p_g[0], 0.0;
-
-        Xg_inv.block(0,0, 3,3) = R;
-        Xg_inv.block(3,3, 3,3) = R;
-        Xg_inv.block(3,0, 3,3) = R * p;
-        Ig_ = Ig_ + Xg_inv.transpose() * I * Xg_inv;
-        Ag = Ag + Xg_inv.transpose() * I * Jsp;
+        link_X_com.block(0,0,3,3) = R;
+        link_X_com.block(3,3,3,3) = R;
+        link_X_com.block(3,0,3,3) = -R * vecCross(link_pos - com_pos);
+        Ig_ = Ig_ + link_X_com.transpose() * I * link_X_com;
+        //xyz rpy joint
+        Ag = Ag + link_X_com.transpose() * I * Jsp;
+        //kim's code, not intuitive
+        // p_g = R * (com_pos - link_pos);
+        // p = vecCross(p_g);
+        // Xg_inv.block(0,0, 3,3) = R;
+        // Xg_inv.block(3,3, 3,3) = R;
+        // Xg_inv.block(3,0, 3,3) = p * R;
+        // Ig_2 = Ig_2 + Xg_inv.transpose() * I * Xg_inv;
+        // Ag_2 = Ag_2 + Xg_inv.transpose() * I * Jsp;
     }
+    // bool Ig_equal, Ag_equal;
+    // Ig_equal = Ig_.isApprox(Ig_2, 1e-12);
+    // Ag_equal = Ag.isApprox(Ag_2, 1e-12);
+    // cout << "is equal to kim\n";
+    // cout << "Ig: " << Ig_equal << "  Ag: " << Ag_equal << endl;
+    MatrixXd lin_mat = Ag.block(0,0,3,6);
+    MatrixXd ang_mat = Ag.block(3,0,3,6);
+    //moemntum: rpy xyz
+    //vel: rpy xyz joint
+    Ag.block(0,0,3,6) << lin_mat.rightCols(3), lin_mat.leftCols(3);
+    Ag.block(3,0,3,6) << ang_mat.rightCols(3), ang_mat.leftCols(3);
     Jg_ = Ig_.inverse() * Ag;
 
-    centroid_vel_ = Jg_ * qdot;
+    //centroid_vel_ = Jg_ * qdot;
 }
 
-void KinModel::getCoMJacobian(dynacore::Matrix & Jcom) const {
-    Vector3d zero_vector = Vector3d::Zero();
-    dynacore::Vector q(robot::num_q);
+void KinModel::getCoMJacobian(MatrixXd & Jcom) const {
+    Vec3 zero_vector = Vec3::Zero();
+    VectorXd q(robot::num_q);
 
-    Jcom = dynacore::Matrix::Zero(3, model_->qdot_size);
+    Jcom = MatrixXd::Zero(3, model_->qdot_size);
     MatrixNd J(3, model_->qdot_size);
 
     double mass;
@@ -118,12 +132,12 @@ void KinModel::getCoMJacobian(dynacore::Matrix & Jcom) const {
     Jcom /= tot_mass;
 }
 
-void KinModel::getCoMPos(dynacore::Vect3 & CoM_pos)const {
-    Vector3d zero_vector = Vector3d::Zero();
-    dynacore::Vector q(robot::num_q);
+void KinModel::getCoMPos(Vec3 & CoM_pos)const {
+    Vec3 zero_vector = Vec3::Zero();
+    VectorXd q(robot::num_q);
 
     CoM_pos.setZero();
-    Vector3d link_pos;
+    Vec3 link_pos;
 
     int start_idx = _find_body_idx(robot_link::trunk);
     double mass;
@@ -140,13 +154,13 @@ void KinModel::getCoMPos(dynacore::Vect3 & CoM_pos)const {
     CoM_pos /= tot_mass;
 }
 
-void KinModel::getCoMVel(dynacore::Vect3 & CoM_vel) const {
-    dynacore::Vector q, qdot;
+void KinModel::getCoMVel(Vec3 & CoM_vel) const {
+    VectorXd q, qdot;
     int start_idx = _find_body_idx(robot_link::trunk);
     CoM_vel.setZero();
-    Vector3d link_vel;
+    Vec3 link_vel;
 
-    Vector3d zero_vector = Vector3d::Zero();
+    Vec3 zero_vector = Vec3::Zero();
     double mass;
     double tot_mass(0.0);
     for (int i(start_idx); i< model_->mBodies.size() ; ++i){
@@ -154,16 +168,17 @@ void KinModel::getCoMVel(dynacore::Vect3 & CoM_vel) const {
 
         // CoM velocity Update
         link_vel = CalcPointVelocity ( *model_, q, qdot, i, model_->mBodies[i].mCenterOfMass, false);
+        //cout << link_vel << endl;
         CoM_vel += mass * link_vel;
         tot_mass += mass;
     }
     CoM_vel /= tot_mass;
 }
 
-void KinModel::getPos(int link_id, dynacore::Vect3 & pos){
-    Vector3d zero;
+void KinModel::getPos(int link_id, Vec3 & pos){
+    Vec3 zero;
     Matrix3d R;
-    dynacore::Vector q(robot::num_q);
+    VectorXd q(robot::num_q);
 
     int bodyid = _find_body_idx(link_id);
     if(bodyid >=model_->fixed_body_discriminator){
@@ -179,10 +194,10 @@ void KinModel::getPos(int link_id, dynacore::Vect3 & pos){
 
 }
 
-void KinModel::getOri(int link_id, dynacore::Vect3 & rpy){
+void KinModel::getOri(int link_id, Vec3 & rpy){
     Matrix3d R;
-    dynacore::Quaternion ori;
-    dynacore::Vector q(robot::num_q);
+    eigenQuaternion ori;
+    VectorXd q(robot::num_q);
     R = CalcBodyWorldOrientation( *model_, q, _find_body_idx(link_id), false);
     ori = R.transpose();
 
@@ -192,12 +207,12 @@ void KinModel::getOri(int link_id, dynacore::Vect3 & rpy){
         ori.y() *= (-1.);
         ori.z() *= (-1.);
     }
-    dynacore::convert(ori, rpy[2], rpy[1], rpy[0]);
+    quaToRpy(ori, rpy[2], rpy[1], rpy[0]);
 }
 
-void KinModel::getLinearVel(int link_id, dynacore::Vect3 & vel){
-    Vector3d zero;
-    dynacore::Vector q, qdot;
+void KinModel::getLinearVel(int link_id, Vec3 & vel){
+    Vec3 zero;
+    VectorXd q, qdot;
 
     int bodyid = _find_body_idx(link_id);
     if(bodyid >=model_->fixed_body_discriminator){
@@ -210,9 +225,9 @@ void KinModel::getLinearVel(int link_id, dynacore::Vect3 & vel){
     vel = CalcPointVelocity ( *model_, q, qdot, _find_body_idx(link_id), zero, false);
 }
 
-void KinModel::getAngularVel(int link_id, dynacore::Vect3 & ang_vel){
+void KinModel::getAngularVel(int link_id, Vec3 & ang_vel){
     unsigned int bodyid = _find_body_idx(link_id);
-    dynacore::Vector vel, q, qdot;
+    VectorXd vel, q, qdot;
 
     if(bodyid >=model_->fixed_body_discriminator){
         vel = CalcPointVelocity6D(*model_, q, qdot, bodyid,
@@ -225,12 +240,12 @@ void KinModel::getAngularVel(int link_id, dynacore::Vect3 & ang_vel){
     ang_vel = vel.head(3);
 }
 
-void KinModel::getJacobian(int link_id, dynacore::Matrix &J){
-    dynacore::Vector q(robot::num_q);
-    J = dynacore::Matrix::Zero(6, model_->qdot_size);
+void KinModel::getJacobian(int link_id, MatrixXd &J){
+    VectorXd q(robot::num_q);
+    J = MatrixXd::Zero(6, model_->qdot_size);
 
     unsigned int bodyid = _find_body_idx(link_id);
-    Vector3d zero_vector = Vector3d::Zero();
+    Vec3 zero_vector = Vec3::Zero();
     
     if(bodyid >=model_->fixed_body_discriminator){
         CalcPointJacobian6D(*model_, q, bodyid,
@@ -255,8 +270,8 @@ void KinModel::getJacobian(int link_id, dynacore::Matrix &J){
     // J = World2Body6D * J;
 }
 
-void KinModel::getJDotQdot(int link_id, dynacore::Vector & JDotQdot){
-    dynacore::Vector q, qdot, qddot;
+void KinModel::getJDotQdot(int link_id, VectorXd & JDotQdot){
+    VectorXd q, qdot, qddot;
 
     unsigned int bodyid = _find_body_idx(link_id);
     if(bodyid >=model_->fixed_body_discriminator){
@@ -271,8 +286,8 @@ void KinModel::getJDotQdot(int link_id, dynacore::Vector & JDotQdot){
     JDotQdot[5] -= gravity_;
 }
 
-void KinModel::getWorldToBodyMatrix(dynacore::Mat3 & BodyMatrix){
-    dynacore::Vector q;
+void KinModel::getWorldToBodyMatrix(Mat3 & BodyMatrix){
+    VectorXd q;
     int body_idx = _find_body_idx(robot_link::trunk);
 
     BodyMatrix = CalcBodyWorldOrientation(*model_, q, body_idx, false);

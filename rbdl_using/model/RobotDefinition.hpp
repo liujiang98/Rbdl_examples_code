@@ -1,7 +1,7 @@
 #ifndef ROBOT_DEFINITION
 #define ROBOT_DEFINITION
-#include <iostream>
-using namespace std;
+
+#include "common_utils/common.hpp"
 
 namespace robot{
     constexpr int num_q = 19;

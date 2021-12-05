@@ -1,7 +1,7 @@
 #ifndef MERCURY_DYN_MODEL
 #define MERCURY_DYN_MODEL
 
-#include "utils/common_convert_calcu.hpp"
+#include "common_utils/common.hpp"
 #include <rbdl/rbdl.h>
 
 class DynModel{
@@ -10,18 +10,18 @@ public:
     DynModel(RigidBodyDynamics::Model* model);
     ~DynModel(void);
 
-    bool getMassInertia(dynacore::Matrix & a);
-    bool getInverseMassInertia(dynacore::Matrix & ainv);
-    bool getGravity(dynacore::Vector &  grav);
-    bool getCoriolis(dynacore::Vector & coriolis);
+    bool getMassInertia(MatrixXd & a);
+    bool getInverseMassInertia(MatrixXd & ainv);
+    bool getGravity(VectorXd &  grav);
+    bool getCoriolis(VectorXd & coriolis);
 
-    void UpdateDynamics(const dynacore::Vector & q, const dynacore::Vector & qdot);
+    void UpdateDynamics(const VectorXd & q, const VectorXd & qdot);
 
 protected:
-    dynacore::Matrix A_;
-    dynacore::Matrix Ainv_;
-    dynacore::Vector grav_;
-    dynacore::Vector coriolis_;
+    MatrixXd A_;
+    MatrixXd Ainv_;
+    VectorXd grav_;
+    VectorXd coriolis_;
 
     RigidBodyDynamics::Model* model_;
 };

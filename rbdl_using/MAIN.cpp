@@ -84,6 +84,7 @@ int main(void) {
 	  
 	cout << "gravity\n";
 		cout << G.transpose() << endl;
-
+	
+	delete _model;
 	return 0;
 }

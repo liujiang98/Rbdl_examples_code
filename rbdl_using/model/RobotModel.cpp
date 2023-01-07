@@ -4,7 +4,8 @@
 #include <rbdl/urdfreader.h>
 #include <stdio.h>
 
-#define THIS_COM "/home/ytw/rbdl_using/urdf/"
+// #define THIS_COM "/home/lj/Rbdl_examples_code/rbdl_using/urdf/"
+#define THIS_COM "/home/lj/flapping_model/src/model/model/urdf/"
 
 using namespace RigidBodyDynamics;
 using namespace RigidBodyDynamics::Math;
@@ -14,7 +15,7 @@ RobotModel::RobotModel(){
   rbdl_check_api_version (RBDL_API_VERSION);
 
   if (!Addons::URDFReadFromFile (
-              THIS_COM"aliengo.urdf", model_, true, false)) {
+              THIS_COM"model.urdf", model_, true, true)) {
     std::cerr << "Error loading model aliengo.urdf" << std::endl;
     abort();
   }
@@ -72,22 +73,23 @@ void RobotModel::getAg_AgdotQdot(MatrixXd & Ag, MatrixXd & AgdotQdot){
   dyn_model_->getMassInertia(H);
   MatrixXd base_lin_mat = H.block(0,0,3,6);
   MatrixXd base_ang_mat = H.block(3,0,3,6);
-  MatrixXd joint_lin_mat = H.block(0,6,3,12);
-  MatrixXd joint_ang_mat = H.block(3,6,3,12);
+  MatrixXd joint_lin_mat = H.block(0,6,3,robot::num_act_joint);
+  MatrixXd joint_ang_mat = H.block(3,6,3,robot::num_act_joint);
   //moemntum: rpy xyz
   //vel: rpy xyz joint
   H.block(0,0,3,6) << base_ang_mat.rightCols(3), base_ang_mat.leftCols(3);
   H.block(3,0,3,6) << base_lin_mat.rightCols(3), base_lin_mat.leftCols(3);
-  H.block(0,6,3,12) = joint_ang_mat;
-  H.block(3,6,3,12) = joint_lin_mat;
+  H.block(0,6,3,robot::num_act_joint) = joint_ang_mat;
+  H.block(3,6,3,robot::num_act_joint) = joint_lin_mat;
   dyn_model_->getCoriolis(Cq);
   getCoMPosition(compos);
   RigidBodyDynamics::Math::SpatialTransform base_X_com(Mat3::Identity(), -compos);
   getWorld2BodyMatrix(body_R_base);
   RigidBodyDynamics::Math::SpatialTransform body_X_base(body_R_base, Vec3::Zero());
   Ag = base_X_com.toMatrixTranspose() * U1 * H;
-  Ag.block(0,0,3,18) = (base_X_com.toMatrixTranspose() * body_X_base.toMatrixTranspose() * U1 * H).block(0,0,3,18);
-  Ag.block(0,3,3,3) = Mat3::Zero();
+  Ag.block(0,0,3,robot::num_qdot) = (base_X_com.toMatrixTranspose() 
+                                    * body_X_base.toMatrixTranspose() * U1 * H).block(0,0,3,robot::num_qdot);
+  Ag.block(0,3,3,3) = Mat3::Zero();  
 
   AgdotQdot = base_X_com.toMatrixTranspose() * U1 * Cq;
 

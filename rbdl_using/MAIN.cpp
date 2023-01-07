@@ -8,7 +8,7 @@ struct modelStateData{
 
 int main(void) {
 	RobotModel* _model = new RobotModel();
-	//_model->PrintLinkList();
+	_model->PrintLinkList();
 	struct modelStateData _state = {
 		VectorXd::Zero(robot::num_q), 
 		VectorXd::Zero(robot::num_qdot)
@@ -26,18 +26,21 @@ int main(void) {
 	R_6D.block(0,0,3,3) = R;
 	R_6D.block(3,3,3,3) = R;
 	eigenQuaternion qua(R);
-	_state._q << 0, 0, 0, qua.x(), qua.y(), qua.z(),
-		0., 0., 0,
-		0, 0.7, 0,
-		0, 0.8, 0,
-		0., 0, 0,
-		qua.w();
+	// _state._q << 0, 0, 0, qua.x(), qua.y(), qua.z(),
+	// 	0., 0., 0,
+	// 	0, 0.7, 0,
+	// 	0, 0.8, 0,
+	// 	0., 0, 0,
+	// 	qua.w();
+	_state._q << 0, 0, 0, 0, 0, 0, 0, 0, 0;
 	//xyz rpy
-	_state._qdot << 0.7, 0.5, 0.2, 500, 500, 500,
-		0.9, 0, 0.,
-		0.9, 0, 0,
-		1.8, 0, 0.7,
-		8, 0, 0;
+
+	// _state._qdot << 0.7, 0.5, 0.2, 500, 500, 500,
+	// 	0.9, 0, 0.,
+	// 	0.9, 0, 0,
+	// 	1.8, 0, 0.7,
+	// 	8, 0, 0;
+	_state._qdot << 0, 0, 0, 0, 0, 0, 0, 0;
 	_model -> UpdateSystem(_state._q, _state._qdot);
 	_model -> getCoMPosition(compos);
 	_model -> getCoMVelocity(comvel);
@@ -52,9 +55,9 @@ int main(void) {
 	
 	_model -> getComState_dwl(_state._q, _state._qdot, mass, compos_dwl, comvel_dwl, angmomen_dwl);
 	
-	qdot.resize(18);
+	qdot.resize(robot::num_qdot);
 	//vel: rpy xyz joint
-	qdot << _state._qdot.segment(3,3), _state._qdot.segment(0,3), _state._qdot.tail(12);
+	qdot << _state._qdot.segment(3,3), _state._qdot.segment(0,3), _state._qdot.tail(robot::num_qdot - 6);
 	L = Ag_kim * qdot;
 	comvel_2 = cJ * qdot;
 	linmomen_dwl = mass * comvel_dwl;
@@ -79,12 +82,15 @@ int main(void) {
 		cout << "kim\n" << cI<< endl;
 		cout << "dwl\n" << cI_dwl << endl;
 	cout << "Ag\n";
-		cout << "kim\n" << Ag_kim.block(0,0,6,12) << endl;
-		cout << "wensing\n" << Ag_wensing.block(0,0,6,12) << endl;
+		// cout << "kim\n" << Ag_kim.block(0,0,6,12) << endl;
+		// cout << "wensing\n" << Ag_wensing.block(0,0,6,12) << endl;
 	  
 	cout << "gravity\n";
 		cout << G.transpose() << endl;
-	
+	// VectorXd Tau = VectorXd::Zero (robot::num_qdot);
+	// VectorXd QDDot = VectorXd::Zero (robot::num_qdot);
+	// ForwardDynamics (*(_model->model_), _state._q, qdot, Tau, QDDot);
+	// std::cout << QDDot.transpose() << std::endl;
 	delete _model;
 	return 0;
 }

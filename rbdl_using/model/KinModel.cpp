@@ -6,11 +6,8 @@ using namespace RigidBodyDynamics;
 //extern variables in RobotDefinition.hpp
 const char* link_name[] =
 {
-    "trunk",
-    "FR_hip","FR_thigh","FR_calf",
-    "FL_hip","FL_thigh","FL_calf",
-    "RR_hip","RR_thigh","RR_calf",
-    "RL_hip","RL_thigh","RL_calf"
+    "base_link",
+    "link1","link2"
 };
 
 KinModel::KinModel( RigidBodyDynamics::Model* model):
@@ -55,7 +52,7 @@ void KinModel::_UpdateCentroidFrame(const VectorXd & q,
     MatrixXd I = MatrixXd::Zero(6, 6);
     MatrixXd Jsp = MatrixXd::Zero(6, model_->qdot_size);
 
-    int start_idx = _find_body_idx(robot_link::trunk);
+    int start_idx = _find_body_idx(robot_link::base_link);
     Matrix3d p;
     Matrix3d cmm;
     Matrix3d R;
@@ -119,7 +116,7 @@ void KinModel::getCoMJacobian(MatrixXd & Jcom) const {
 
     double mass;
     double tot_mass(0.0);
-    int start_idx = _find_body_idx(robot_link::trunk);
+    int start_idx = _find_body_idx(robot_link::base_link);
 
     for (int i(start_idx); i< model_->mBodies.size() ; ++i){
         mass = model_->mBodies[i].mMass;
@@ -139,7 +136,7 @@ void KinModel::getCoMPos(Vec3 & CoM_pos)const {
     CoM_pos.setZero();
     Vec3 link_pos;
 
-    int start_idx = _find_body_idx(robot_link::trunk);
+    int start_idx = _find_body_idx(robot_link::base_link);
     double mass;
     double tot_mass(0.0);
     for (int i(start_idx); i< model_->mBodies.size() ; ++i){
@@ -156,7 +153,7 @@ void KinModel::getCoMPos(Vec3 & CoM_pos)const {
 
 void KinModel::getCoMVel(Vec3 & CoM_vel) const {
     VectorXd q, qdot;
-    int start_idx = _find_body_idx(robot_link::trunk);
+    int start_idx = _find_body_idx(robot_link::base_link);
     CoM_vel.setZero();
     Vec3 link_vel;
 
@@ -288,23 +285,19 @@ void KinModel::getJDotQdot(int link_id, VectorXd & JDotQdot){
 
 void KinModel::getWorldToBodyMatrix(Mat3 & BodyMatrix){
     VectorXd q;
-    int body_idx = _find_body_idx(robot_link::trunk);
+    int body_idx = _find_body_idx(robot_link::base_link);
 
     BodyMatrix = CalcBodyWorldOrientation(*model_, q, body_idx, false);
 }
 
 unsigned int KinModel::_find_body_idx(int id) const {
     switch(id){
-        case robot_link::trunk:
-            return model_->GetBodyId("trunk");
-        case robot_link::FR_foot:
-            return model_->GetBodyId("FR_foot");
-        case robot_link::FL_foot:
-            return model_->GetBodyId("FL_foot");
-        case robot_link::RR_foot:
-            return model_->GetBodyId("RR_foot");
-        case robot_link::RL_foot:
-            return model_->GetBodyId("RL_foot");
+        case robot_link::base_link:
+            return model_->GetBodyId("base_link");
+        case robot_link::link1:
+            return model_->GetBodyId("link1");
+        case robot_link::link2:
+            return model_->GetBodyId("link2");
         default:
             std::cout << "unkonown id" << std::endl;
     }
